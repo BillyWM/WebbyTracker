@@ -1,0 +1,24 @@
+body {background-color: black; color:white; font-size:8pt; font-family: monospace;}
+table, tbody, tr, td {margin: 0; padding: 0; border: 0}
+.track {padding-left: 4px; padding-right:4px; margin:0}
+.pat-block { background-color:black; }
+.note { color: white; }
+.instrument { color:lightgreen;}
+.volume { color:lightblue; }
+.effect { color:lightpink; }
+.parameter { color:green; }
+.selected {background-color: blue}
+
+span.empty { color: white; }
+
+table {
+	font-family: monospace;
+	background-color: black;
+}
+
+#patterns tr:nth-child(4n) {
+	background-color:#1B1B00;
+}
+#patterns tr:nth-child(16n) {
+	background-color:#404000;
+}

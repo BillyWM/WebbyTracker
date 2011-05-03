@@ -1,115 +1,147 @@
 <!DOCTYPE html>
 <head>
-	<script src="mootools-core-1.3.2.js"></script>
+	<script src="js/mootools-core-1.3.2.js"></script>
+	<script src="js/mootools-more-1.3.2.1.js"></script> <!-- HTMLTable and Keyboard -->
 	<script src="js/modfile.js"></script>
 	<script src="js/modplayer.js"></script>
 	<script src="js/support.js"></script>
-	<script src="tracker.js"></script>
-	<style>
-		/* http://meyerweb.com/eric/tools/css/reset/ 
-		   v2.0 | 20110126
-		   License: none (public domain)
-		*/
-
-		html, body, div, span, applet, object, iframe,
-		h1, h2, h3, h4, h5, h6, p, blockquote, pre,
-		a, abbr, acronym, address, big, cite, code,
-		del, dfn, em, img, ins, kbd, q, s, samp,
-		small, strike, strong, sub, sup, tt, var,
-		b, u, i, center,
-		dl, dt, dd, ol, ul, li,
-		fieldset, form, label, legend,
-		table, caption, tbody, tfoot, thead, tr, th, td,
-		article, aside, canvas, details, embed, 
-		figure, figcaption, footer, header, hgroup, 
-		menu, nav, output, ruby, section, summary,
-		time, mark, audio, video {
-			margin: 0;
-			padding: 0;
-			border: 0;
-			font-size: 100%;
-			font: inherit;
-			vertical-align: baseline;
-		}
-		/* HTML5 display-role reset for older browsers */
-		article, aside, details, figcaption, figure, 
-		footer, header, hgroup, menu, nav, section {
-			display: block;
-		}
-		body {
-			line-height: 1;
-		}
-		ol, ul {
-			list-style: none;
-		}
-		blockquote, q {
-			quotes: none;
-		}
-		blockquote:before, blockquote:after,
-		q:before, q:after {
-			content: '';
-			content: none;
-		}
-		table {
-			border-collapse: collapse;
-			border-spacing: 0;
-		}
-	</style>
+	<script src="js/tracker.js"></script>
+	<link rel="stylesheet" type="text/css" href="css/reset.css">
+	<link rel="stylesheet" type="text/css" href="css/main.css">
 	<script>
 		window.addEvent('domready', init);
+		
+		//Keys of the virtual piano, in semitone values relative to the current octave
+		//Top portion is one octave up (12 semitones)
+		var noteKeys = {
+			"z":0, "s": 1, "x": 2, "d": 3, "c": 4, "v": 5, "g": 6,
+			"b": 7, "h": 8, "n":9, "j": 10, "m": 11, ",": 12, "l": 13,
+			".": 14, ";": 15, "/": 16,
+			"q":12, "2":13, "w":14, "3":15, "e":16, "4":17, "r":18, "5":19,
+			"t":20, "6":21, "y":22, "7":23, "u":24, "8":25, "i":26, "9": 27,
+			"o":28, "0":29, "p":30, "-":31, "[":32, "=":33, "]":34
+		}
+		var noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+		//For holding state information
+		var view = new PatternView();
+		var	body;
+		var colToGroup = [0, 0, 0, 1, 1, 2, 2, 3, 4, 4];
+			
+		
 		function init() {
-			var body = $(document.body);
+			body = $(document.body);
 			var patterns = $("patterns");
-			var row = body.getFirst("#patterns .row");
-			var track = body.getFirst("#patterns .track");
-			//add 3 more tracks
-			for (var i=0; i<3; i++) {
-				track.clone().inject(row, "top");
+
+			for (var r=0; r<64; r++) {
+				var row = new Element('tr', {'class': 'row'});
+				for (var t=0; t<view.channels; t++) {
+					var track = new Element('td', {
+						'class': 'track',
+						'html': '<span class="note">...</span>' +
+								'<span class="instrument">..</span>' +
+								'<span class="volume">..</span>' +
+								'<span class="effect">.</span>' +
+								'<span class="parameter">..</span>'
+					});
+					track.inject(row);
+				}
+				row.inject(patterns);
 			}
-			//copy to 63 more rows
-			for (var i=0; i<63; i++) {
-				row.clone().inject(patterns, "top");
+
+			view.selectedEl = $$(".note")[0];
+			view.selectedEl.addClass("selected");
+			
+			//Setup key input so we can move around and enter notes
+			window.addEvent('keydown', handleKeys);
+		}
+
+		
+		function handleKeys(e) {
+			var key = e.key, code = e.code;
+			console.log(key, code);
+			e.preventDefault();
+
+			//un-highlight whatever we were on. We'll reapply later
+			view.selectedEl.removeClass("selected");
+			
+			//basic movement
+			switch (key) {
+				case "left":
+					//SPECIAL CASE: Notes are 1 column
+					if (view.currentCol == 2) {
+						view.currentCol -= 3;
+					 } else {
+						 view.currentCol -= 1;
+					 }
+					 break;
+				case "right":
+					if (view.currentCol == 0) {
+						view.currentCol += 3;
+					} else {
+						view.currentCol += 1;
+					}
+					break;
+				case "up": view.currentRow -= 1; break;
+				case "down": view.currentRow += 1; break;
 			}
-			patterns.getFirst(".row .track .note").addClass("selected");
+			
+			
+			//Move through columns and channels. Clamp movement to valid area
+			if (view.currentCol < 0) {
+				if (view.currentChannel > 0) {
+					view.currentChannel--;
+					view.currentCol = 9;
+				} else {
+					view.currentCol = 0;
+				}
+			}
+			if (view.currentCol > 9) {
+				if (view.currentChannel < view.maxChannel) {
+					view.currentChannel++;
+					view.currentCol = 0;
+				} else {
+					view.currentCol = 9;
+				}
+			}
+			if (view.currentRow < 0) { view.currentRow = 0; }
+			if (view.currentRow > view.maxRow) { view.currentRow = view.maxRow; }
+			
+			if (view.currentChannel < 0) { view.currentChannel = 0; }
+			if (view.currentChannel > view.maxChannel) { view.currentChannel = view.maxChannel; }
+
+			//Group is computed from column
+			view.currentGroup = colToGroup[view.currentCol];
+			
+			//Get a reference to the selected group (a styled <span>)
+			//Jump down to the right row, channel, and grouping
+			var selector = "#patterns tr:nth-child(" + (view.currentRow + 1) + ")" +
+							" td:nth-child(" + (view.currentChannel + 1) + ")" + 
+							" span:nth-child(" + (view.currentGroup + 1) + ")";
+			view.selectedEl = $$(selector)[0];
+			
+			//Figure out what value to store in the .mod data based on column and keypress
+			if (view.currentGroup == 0 && noteKeys[key] !== undefined) {
+				var octave = view.octave + Math.floor(noteKeys[key] / 12);
+				var note = noteKeys[key] % 12;
+				var noteStr = (noteNames[note].length < 2) ? noteNames[note] + "-" : noteNames[note];
+				view.selectedEl.innerHTML = "" + noteStr + "" + octave;
+				view.currentRow += view.step;
+			}
+
+			view.selectedEl.addClass("selected");
+		}
+		
+		function isNumkey(k) {
+			//if (k > 
 		}
 	</script>
-	<style>
-		body {background-color: black; color:white; font-size:8pt; font-family: monospace;}
-		table, tbody, tr, td {margin: 0; padding: 0; border: 0}
-		.track {padding-left: 8px; padding-right:8px; margin:0}
-		.pat-block { background-color:black; }
-		.note { color: yellow; }
-		.instrument { color:lightgreen;}
-		.volume { color:lightblue; }
-		.effect { color:lightpink; }
-		.param { color:green; }
-		.selected {background-color: blue}
 
-		span.empty { color: white; }
-
-		table {
-			font-family: monospace;
-			background-color: black;
-		}
-
-	</style>
 </head>
 
 <body>
-
-	<table id="patterns">
-		<tr class="row"> 
-			<td class="track"> 
-				<span class="note">---</span>
-				<span class="instrument">--</span>
-				<span class="volume">--</span>
-				<span class="effect">-</span>
-				<span class="param">--</span>
-			</td>
-		</tr>
-	</table>
-
-
+<table id="patterns" cellspacing="0" cellpadding="0">
+</table>
 </body>
 
 </html>
